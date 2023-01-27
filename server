@@ -1,0 +1,72 @@
+map_hash_max_size 128;
+map_hash_bucket_size 128;
+
+# https upgrade
+server {
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+# www to non-www
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.zenonhub.io;
+    return 301 https://zenonhub.io$request_uri;
+}
+
+# www to non-www
+server {
+    listen          443 ssl;
+    listen          [::]:443 ssl http2;
+    server_name     www.zenonhub.io;
+
+    ssl_certificate /etc/letsencrypt/live/zenonhub.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/zenonhub.io/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    return 301 https://zenonhub.io$request_uri;
+}
+
+
+# old to new domain
+server {
+    listen 80;
+    listen [::]:80;
+    server_name zenonhub.org www.zenonhub.org;
+    return 301 https://zenonhub.io$request_uri;
+}
+
+# old to new domain
+server {
+    listen 443;
+    listen [::]:443;
+    server_name zenonhub.org www.zenonhub.org;
+
+    ssl_certificate /etc/letsencrypt/live/zenonhub.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/zenonhub.org/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    return 301 https://zenonhub.io$request_uri;
+}
+
+
+# Dont log 4xx requests
+map $status $loggable_status {
+    ~^[4]   0;
+    default 1;
+}
+
+# Dont log http 1.x requests
+map $server_protocol $loggable_protocol {
+    ~(1\.0|1\.1) 0;
+    default $loggable_status;
+}
+
+# Dont log specific user agents
+map $http_user_agent $loggable {
+    ~(Googlebot|bingbot|AhrefsBot|yahoo|YandexBot|MJ12bot|PaperLiBot|Semanticbot|CensysInspect|InternetMeasurement|python|facebook|GuzzleHttp|DotBot|Twingly|panscient|BLEXBot|Expanse|zgrab|curl|libwww|Banner|Twitterbo|serpstatbo|client) 0;
+    default $loggable_protocol;
+}

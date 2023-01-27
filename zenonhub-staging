@@ -1,0 +1,67 @@
+server {
+    listen                  443 ssl http2;
+    listen                  [::]:443 ssl http2;
+    server_name             staging.zenonhub.io;
+
+    satisfy any;
+    allow 127.0.0.1;
+    deny all;
+
+    auth_basic              "Development server";
+    auth_basic_user_file    /etc/nginx/.htpasswd;
+
+    set                     $base /home/deployer/sites/zenonhub/staging/current;
+    root                    $base/public;
+    index                   index.php;
+
+    charset utf-8;
+    add_header X-Frame-Options           "SAMEORIGIN";
+    add_header X-XSS-Protection          "1; mode=block" always;
+    add_header X-Content-Type-Options    "nosniff" always;
+    add_header Referrer-Policy           "no-referrer-when-downgrade" always;
+#    add_header Content-Security-Policy   "default-src 'self' http: https: ws: wss: data: blob: 'unsafe-inline'; frame-ancestors 'self'; script-src 'unsafe-eval';" always;
+    add_header Permissions-Policy        "interest-cohort=()" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # Cache static files
+    location ~* ^.+\.(?:css|cur|js|jpe?g|gif|htc|ico|png|html|xml|otf|ttf|eot|woff|woff2|svg|txt)$ {
+        access_log off;
+        expires 30d;
+        add_header Cache-Control public;
+
+        ## No need to bleed constant updates. Send the all shebang in one
+        ## fell swoop.
+        tcp_nodelay off;
+
+        ## Set the OS file cache.
+        open_file_cache max=3000 inactive=120s;
+        open_file_cache_valid 45s;
+        open_file_cache_min_uses 2;
+        open_file_cache_errors off;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    access_log /home/deployer/sites/zenonhub/staging/logs/access.log combined if=$loggable;
+    error_log  /home/deployer/sites/zenonhub/staging/logs/error.log error;
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT $realpath_root;
+        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    ssl_certificate /etc/letsencrypt/live/zenonhub.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/zenonhub.io/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
