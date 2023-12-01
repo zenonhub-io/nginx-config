@@ -1,16 +1,16 @@
-# https load balancer
-upstream https-backend {
-    server 127.0.0.1:35887;
-    #sticky route $route_cookie $route_uri;
+# Setup load balancer Local IP addresses for HTTPS connections
+upstream https-node {
+    server xxx.xxx.xxx.xxx:35997;
+    server xxx.xxx.xxx.xxx:35997;
 }
 
-# wss load balancer
-upstream wss-backend {
-    server 127.0.0.1:35888;
-    keepalive 1000;
+# Setup load balancer Local IP addresses for WSS connections
+upstream wss-node {
+    server xxx.xxx.xxx.xxx:35998;
+    server xxx.xxx.xxx.xxx:35998;
 }
 
-# node info page and ssl renewal
+# Server block to renew SSL certs by letsencrypt  DO NOT REMOVE
 server {
     listen 443 ssl;
     server_name node.zenonhub.io;
@@ -21,25 +21,28 @@ server {
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
     ssl_verify_client off;
 
-    return 301 https://www.zenonhub.io/node;
+    return 301 https://zenonhub.io/nodes;
 }
 
-# node https block
+# Server block for https connections to port 35997 for API calls
 server {
     listen 35997 ssl;
     server_name node.zenonhub.io;
-    ssl_certificate /etc/letsencrypt/live/node.zenonhub.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/node.zenonhub.io/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/node.zenonhub.io/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/node.zenonhub.io/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 
     location / {
-        #proxy_pass http://https-backend;
-        proxy_pass http://127.0.0.1:35887;
+        proxy_pass http://https-node;
+        proxy_redirect off;
+        proxy_set_header Host $upstream_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        add_header X-Host $host;
     }
 }
 
-# node wss block
+# Server block for wss connections to port 35998 for secure websocket calls
 server {
     listen 35998 ssl;
     server_name node.zenonhub.io;
@@ -52,11 +55,10 @@ server {
 
     location / {
         proxy_http_version 1.1;
-        proxy_pass http://wss-backend;
+        proxy_pass http://wss-node;
         proxy_redirect off;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 3600s;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
